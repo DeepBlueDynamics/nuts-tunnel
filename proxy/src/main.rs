@@ -5,8 +5,8 @@ use axum::body::Bytes;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{State, WebSocketUpgrade};
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Response};
-use axum::routing::any;
+use axum::response::{Html, IntoResponse, Response};
+use axum::routing::{any, get};
 use axum::Router;
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
@@ -58,7 +58,9 @@ async fn main() {
     });
 
     let app = Router::new()
+        .route("/", get(landing_page))
         .route("/nuts/ws", any(ws_handler))
+        .route("/nuts/status", get(status_handler))
         .fallback(proxy_handler)
         .with_state(state);
 
@@ -68,6 +70,21 @@ async fn main() {
 
     info!("nuts-proxy listening on :{port}");
     axum::serve(listener, app).await.expect("serve failed");
+}
+
+// ── Landing page ──────────────────────────────────────────────────────
+
+async fn landing_page() -> Html<&'static str> {
+    Html(include_str!("../static/index.html"))
+}
+
+async fn status_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let tunnels: Vec<String> = state.tunnels.iter().map(|e| e.key().clone()).collect();
+    axum::Json(serde_json::json!({
+        "status": "ok",
+        "active_tunnels": tunnels.len(),
+        "tunnels": tunnels,
+    }))
 }
 
 // ── WebSocket tunnel endpoint ──────────────────────────────────────────

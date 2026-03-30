@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>nuts tunnel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        darkMode: 'class',
+        theme: {
+            extend: {
+                colors: {
+                    'n-bg': '#0a0a0f',
+                    'n-surface': '#12121a',
+                    'n-border': '#1e1e2e',
+                    'n-cyan': '#00e5ff',
+                    'n-purple': '#b388ff',
+                    'n-text': '#e0e0e8',
+                    'n-muted': '#6b6b80',
+                }
+            }
+        }
+    }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+        body { font-family: 'JetBrains Mono', monospace; }
+        .glow { text-shadow: 0 0 20px rgba(0, 229, 255, 0.3); }
+        .card-glow { box-shadow: 0 0 30px rgba(0, 229, 255, 0.05); }
+        .code-block {
+            background: #0d0d14;
+            border: 1px solid #1e1e2e;
+            border-radius: 8px;
+            padding: 16px 20px;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+    </style>
+</head>
+<body class="bg-n-bg text-n-text min-h-screen">
+
+    <!-- Nav -->
+    <nav class="border-b border-n-border px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <span class="text-n-cyan font-bold text-lg glow">nuts tunnel</span>
+            <span class="text-n-muted text-xs">v0.1.0</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <a href="#docs" class="text-n-muted hover:text-n-text text-sm">docs</a>
+            <a href="https://github.com/DeepBlueDynamics/nuts-tunnel" class="text-n-muted hover:text-n-text text-sm">github</a>
+            <button onclick="showLogin()" class="px-4 py-2 bg-n-cyan/10 border border-n-cyan/30 text-n-cyan text-sm rounded hover:bg-n-cyan/20 transition">log in</button>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="max-w-4xl mx-auto px-6 pt-24 pb-16 text-center">
+        <h1 class="text-4xl font-bold mb-4">
+            <span class="text-n-cyan glow">expose localhost</span> to the internet
+        </h1>
+        <p class="text-n-muted text-lg mb-2">secure tunnels through Google Cloud Run</p>
+        <p class="text-n-muted text-sm mb-12">open source &middot; self-hostable &middot; no client install required</p>
+
+        <div class="code-block text-left max-w-2xl mx-auto mb-12">
+            <span class="text-n-muted"># install</span><br>
+            <span class="text-n-cyan">curl</span> <span class="text-n-purple">-fsSL</span> https://tunnel.nuts.services/install.sh | sh<br><br>
+            <span class="text-n-muted"># connect</span><br>
+            <span class="text-n-cyan">nuts-client</span> <span class="text-n-purple">--token</span> YOUR_TOKEN <span class="text-n-purple">--service</span> myapp=3000<br><br>
+            <span class="text-n-muted"># your app is live at:</span><br>
+            <span class="text-white">https://tunnel.nuts.services/myapp/</span>
+        </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="max-w-4xl mx-auto px-6 pb-16">
+        <div class="grid md:grid-cols-3 gap-6">
+            <div class="bg-n-surface border border-n-border rounded-lg p-6 card-glow">
+                <div class="text-n-cyan text-2xl mb-3">1</div>
+                <h3 class="font-bold mb-2">sign up</h3>
+                <p class="text-n-muted text-sm">enter your email. we send a magic link. no passwords.</p>
+            </div>
+            <div class="bg-n-surface border border-n-border rounded-lg p-6 card-glow">
+                <div class="text-n-cyan text-2xl mb-3">2</div>
+                <h3 class="font-bold mb-2">create a token</h3>
+                <p class="text-n-muted text-sm">generate an API token in your dashboard. claim your tunnel name.</p>
+            </div>
+            <div class="bg-n-surface border border-n-border rounded-lg p-6 card-glow">
+                <div class="text-n-cyan text-2xl mb-3">3</div>
+                <h3 class="font-bold mb-2">connect</h3>
+                <p class="text-n-muted text-sm">run the client. your local service is live at tunnel.nuts.services/yourname/</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Status -->
+    <section class="max-w-4xl mx-auto px-6 pb-16">
+        <div class="bg-n-surface border border-n-border rounded-lg p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-2 h-2 rounded-full bg-green-400 pulse-dot"></div>
+                <span class="text-sm font-bold">proxy status</span>
+                <span class="text-n-muted text-xs ml-auto">tunnel.nuts.services</span>
+            </div>
+            <div class="grid md:grid-cols-3 gap-4 text-sm">
+                <div>
+                    <span class="text-n-muted">region</span><br>
+                    <span>us-central1</span>
+                </div>
+                <div>
+                    <span class="text-n-muted">active tunnels</span><br>
+                    <span id="tunnel-count">--</span>
+                </div>
+                <div>
+                    <span class="text-n-muted">uptime</span><br>
+                    <span>99.9%</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden items-center justify-center z-50" onclick="if(event.target===this)hideLogin()">
+        <div class="bg-n-surface border border-n-border rounded-lg p-8 w-full max-w-md card-glow">
+            <h2 class="text-xl font-bold mb-2">log in</h2>
+            <p class="text-n-muted text-sm mb-6">enter your email and we'll send you a magic link</p>
+            <form id="login-form" onsubmit="handleLogin(event)">
+                <input type="email" id="email-input" placeholder="you@example.com"
+                    class="w-full bg-n-bg border border-n-border rounded px-4 py-3 text-sm mb-4 focus:border-n-cyan focus:outline-none"
+                    required>
+                <button type="submit" id="login-btn"
+                    class="w-full bg-n-cyan/10 border border-n-cyan/30 text-n-cyan py-3 rounded font-bold text-sm hover:bg-n-cyan/20 transition">
+                    send magic link
+                </button>
+            </form>
+            <div id="login-success" class="hidden text-center">
+                <div class="text-n-cyan text-3xl mb-3">check your email</div>
+                <p class="text-n-muted text-sm">we sent a login link. click it to continue.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard (hidden, shown after auth) -->
+    <div id="dashboard" class="hidden max-w-4xl mx-auto px-6 pb-16">
+        <div class="bg-n-surface border border-n-border rounded-lg p-6 mb-6">
+            <h2 class="font-bold mb-4">your tunnels</h2>
+            <div class="text-n-muted text-sm mb-4">no tunnels registered yet</div>
+            <div class="flex gap-3">
+                <input type="text" placeholder="tunnel name (e.g. myapp)"
+                    class="flex-1 bg-n-bg border border-n-border rounded px-4 py-2 text-sm focus:border-n-cyan focus:outline-none">
+                <input type="number" placeholder="port" value="3000"
+                    class="w-24 bg-n-bg border border-n-border rounded px-4 py-2 text-sm focus:border-n-cyan focus:outline-none">
+                <button class="px-4 py-2 bg-n-cyan/10 border border-n-cyan/30 text-n-cyan text-sm rounded hover:bg-n-cyan/20 transition">register</button>
+            </div>
+        </div>
+        <div class="bg-n-surface border border-n-border rounded-lg p-6">
+            <h2 class="font-bold mb-4">API tokens</h2>
+            <div class="text-n-muted text-sm mb-4">create a token to authenticate the nuts-client</div>
+            <div class="flex gap-3">
+                <input type="text" placeholder="token name (e.g. laptop)"
+                    class="flex-1 bg-n-bg border border-n-border rounded px-4 py-2 text-sm focus:border-n-cyan focus:outline-none">
+                <button class="px-4 py-2 bg-n-cyan/10 border border-n-cyan/30 text-n-cyan text-sm rounded hover:bg-n-cyan/20 transition">create token</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="border-t border-n-border px-6 py-6 text-center text-n-muted text-xs">
+        <a href="https://github.com/DeepBlueDynamics/nuts-tunnel" class="hover:text-n-text">DeepBlueDynamics/nuts-tunnel</a>
+        &middot; open source under MIT
+    </footer>
+
+    <script>
+    function showLogin() {
+        document.getElementById('login-modal').classList.remove('hidden');
+        document.getElementById('login-modal').classList.add('flex');
+        document.getElementById('email-input').focus();
+    }
+    function hideLogin() {
+        document.getElementById('login-modal').classList.add('hidden');
+        document.getElementById('login-modal').classList.remove('flex');
+    }
+    function handleLogin(e) {
+        e.preventDefault();
+        document.getElementById('login-form').classList.add('hidden');
+        document.getElementById('login-success').classList.remove('hidden');
+    }
+    </script>
+</body>
+</html>
