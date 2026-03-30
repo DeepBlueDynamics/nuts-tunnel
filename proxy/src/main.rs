@@ -218,8 +218,12 @@ async fn proxy_handler(
         .unwrap_or("")
         .to_string();
 
-    let subdomain = match host.split('.').next() {
-        Some(sd) if !sd.is_empty() && sd != host => sd.to_string(),
+    // Extract service name: first label from Host header.
+    // Supports both "svc.tunnel.example.com" and bare "svc.example.com".
+    // Strip optional port (e.g. "svc.tunnel.example.com:443").
+    let host_no_port = host.split(':').next().unwrap_or(&host);
+    let subdomain = match host_no_port.split('.').next() {
+        Some(sd) if !sd.is_empty() && sd != host_no_port => sd.to_string(),
         _ => {
             return (StatusCode::BAD_REQUEST, "missing or invalid Host header").into_response();
         }

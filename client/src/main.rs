@@ -12,7 +12,7 @@ use nuts_protocol::{ClientMsg, ProxyMsg, ServiceDef};
 #[command(name = "nuts-client", version)]
 struct Cli {
     /// WebSocket URL of the nuts-proxy (e.g. wss://proxy.example.com/nuts/ws)
-    #[arg(long, env = "NUTS_PROXY_URL")]
+    #[arg(long, env = "NUTS_PROXY_URL", default_value = "")]
     proxy: String,
 
     /// Auth token (must match NUTS_TOKEN on the proxy)
@@ -104,6 +104,11 @@ async fn main() {
                 description: svc.description,
             });
         }
+    }
+
+    if cli.proxy.is_empty() {
+        error!("no proxy URL — use --proxy, NUTS_PROXY_URL, or set proxy_url in config file");
+        std::process::exit(1);
     }
 
     if cli.services.is_empty() {
