@@ -210,32 +210,35 @@ async fn proxy_handler(
     State(state): State<Arc<AppState>>,
     req: axum::extract::Request,
 ) -> Response {
-    // Extract subdomain from Host header.
-    let host = req
-        .headers()
-        .get("host")
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("")
-        .to_string();
-
-    // Extract service name: first label from Host header.
-    // Supports both "svc.tunnel.example.com" and bare "svc.example.com".
-    // Strip optional port (e.g. "svc.tunnel.example.com:443").
-    let host_no_port = host.split(':').next().unwrap_or(&host);
-    let subdomain = match host_no_port.split('.').next() {
-        Some(sd) if !sd.is_empty() && sd != host_no_port => sd.to_string(),
+    // Path-based routing: /shivvr/health → service "shivvr", forwarded URI "/health"
+    // Extract first path segment as service name, strip it from the forwarded URI.
+    let path = req.uri().path();
+    let (service_name, remainder) = match path.strip_prefix('/') {
+        Some(rest) => match rest.split_once('/') {
+            Some((svc, rem)) => (svc.to_string(), format!("/{rem}")),
+            None if !rest.is_empty() => (rest.to_string(), "/".to_string()),
+            _ => {
+                return (StatusCode::BAD_REQUEST, "missing service name in path — use /service/...").into_response();
+            }
+        },
         _ => {
-            return (StatusCode::BAD_REQUEST, "missing or invalid Host header").into_response();
+            return (StatusCode::BAD_REQUEST, "missing service name in path — use /service/...").into_response();
         }
     };
 
+    // Preserve query string.
+    let forwarded_uri = match req.uri().query() {
+        Some(q) => format!("{remainder}?{q}"),
+        None => remainder,
+    };
+
     // Look up tunnel.
-    let handle = match state.tunnels.get(&subdomain) {
+    let handle = match state.tunnels.get(&service_name) {
         Some(h) => h.clone(),
         None => {
             return (
                 StatusCode::BAD_GATEWAY,
-                format!("no tunnel for '{subdomain}'"),
+                format!("no tunnel for '{service_name}'"),
             )
                 .into_response();
         }
@@ -243,7 +246,7 @@ async fn proxy_handler(
 
     // Decompose the request.
     let method = req.method().to_string();
-    let uri = req.uri().to_string();
+    let uri = forwarded_uri;
     let headers: Vec<(String, String)> = req
         .headers()
         .iter()
@@ -266,7 +269,7 @@ async fn proxy_handler(
     // Send request to client via tunnel.
     let proxy_msg = ProxyMsg::HttpRequest {
         request_id: request_id.clone(),
-        subdomain: subdomain.to_string(),
+        subdomain: service_name.clone(),
         method,
         uri,
         headers,
