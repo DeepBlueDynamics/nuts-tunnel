@@ -1,0 +1,30 @@
+# nuts-client configuration
+# Copy to nuts-tunnel.toml and fill in your values.
+
+proxy_url = "wss://your-proxy.a.run.app/nuts/ws"
+token = "your-shared-secret"
+
+[[services]]
+subdomain = "shivvr"
+port = 8080
+
+[[services]]
+subdomain = "ocr"
+port = 8888
+
+[[services]]
+subdomain = "sdr"
+port = 9090
+
+[[services]]
+subdomain = "grubcrawler"
+port = 6792
+
+[[services]]
+subdomain = "ferricula"
+port = 8764
+
+[[services]]
+subdomain = "n8"
+port = 4000
+description = "nemesis8 gateway"
