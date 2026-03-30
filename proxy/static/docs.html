@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>docs | nuts tunnel</title>
+    <meta name="description" content="Self-host nuts tunnel: deploy your own reverse tunnel proxy on Google Cloud Run.">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥜</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        darkMode: 'class',
+        theme: {
+            extend: {
+                colors: {
+                    'n-bg': '#08090d',
+                    'n-surface': '#0f1117',
+                    'n-border': '#1e2030',
+                    'n-cyan': '#00d4aa',
+                    'n-blue': '#0099ff',
+                    'n-purple': '#b388ff',
+                    'n-text': '#e0e4ef',
+                    'n-muted': '#6b7394',
+                }
+            }
+        }
+    }
+    </script>
+    <style>
+        body { font-family: 'Inter', -apple-system, sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .glow { text-shadow: 0 0 30px rgba(0, 212, 170, 0.4); }
+        .grid-bg {
+            background-image:
+                linear-gradient(rgba(30, 32, 48, 0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(30, 32, 48, 0.3) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+        .nav-blur { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        .code-block {
+            background: #0a0b10;
+            border: 1px solid #1e2030;
+            border-radius: 12px;
+            padding: 16px 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 1.7;
+            overflow-x: auto;
+            color: #e0e4ef;
+        }
+        .code-block .comment { color: #6b7394; }
+        .code-block .cmd { color: #00d4aa; }
+        .code-block .flag { color: #b388ff; }
+        .code-block .string { color: #0099ff; }
+        h2 { scroll-margin-top: 80px; }
+    </style>
+</head>
+<body class="bg-n-bg text-n-text min-h-screen grid-bg">
+
+    <!-- Nav -->
+    <nav class="sticky top-0 z-50 border-b border-n-border bg-n-bg/80 nav-blur px-6 py-3">
+        <div class="max-w-3xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/" class="text-n-cyan font-bold text-lg glow mono">nuts tunnel</a>
+                <span class="text-n-muted text-xs">/docs</span>
+            </div>
+            <div class="flex items-center gap-5">
+                <a href="/" class="text-n-muted hover:text-n-text text-sm transition">home</a>
+                <a href="https://github.com/DeepBlueDynamics/nuts-tunnel" class="text-n-muted hover:text-n-text text-sm transition">github</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-3xl mx-auto px-6 py-12">
+
+        <!-- TOC -->
+        <div class="bg-n-surface border border-n-border rounded-xl p-6 mb-12">
+            <h3 class="font-bold text-sm mb-3 text-n-muted uppercase tracking-wider">contents</h3>
+            <ul class="space-y-2 text-sm">
+                <li><a href="#quickstart" class="text-n-cyan hover:text-n-text transition">quickstart (use our proxy)</a></li>
+                <li><a href="#self-host" class="text-n-cyan hover:text-n-text transition">self-host the proxy</a></li>
+                <li><a href="#client" class="text-n-cyan hover:text-n-text transition">client reference</a></li>
+                <li><a href="#config" class="text-n-cyan hover:text-n-text transition">config file</a></li>
+                <li><a href="#api" class="text-n-cyan hover:text-n-text transition">API endpoints</a></li>
+            </ul>
+        </div>
+
+        <!-- Quickstart -->
+        <h2 id="quickstart" class="text-2xl font-bold mb-4">quickstart</h2>
+        <p class="text-n-muted mb-4 leading-relaxed">Use the hosted proxy at <span class="mono text-sm text-n-text">tunnel.nuts.services</span>. No infrastructure needed.</p>
+
+        <p class="text-sm text-n-muted mb-2">1. Install the client:</p>
+        <div class="code-block mb-4">
+            <span class="cmd">curl</span> <span class="flag">-fsSL</span> https://tunnel.nuts.services/install.sh | <span class="cmd">sh</span>
+        </div>
+
+        <p class="text-sm text-n-muted mb-2">2. Sign up and get a token from the dashboard.</p>
+
+        <p class="text-sm text-n-muted mb-2">3. Connect:</p>
+        <div class="code-block mb-8">
+            <span class="cmd">nuts-client</span> \<br>
+            &nbsp;&nbsp;<span class="flag">--proxy</span> wss://tunnel.nuts.services/nuts/ws \<br>
+            &nbsp;&nbsp;<span class="flag">--token</span> <span class="string">YOUR_TOKEN</span> \<br>
+            &nbsp;&nbsp;<span class="flag">--service</span> myapp=3000
+        </div>
+        <p class="text-n-muted mb-12 text-sm">Your service is live at <span class="mono text-n-text">https://tunnel.nuts.services/myapp/</span></p>
+
+        <!-- Self-host -->
+        <h2 id="self-host" class="text-2xl font-bold mb-4">self-host the proxy</h2>
+        <p class="text-n-muted mb-6 leading-relaxed">Deploy your own proxy on Google Cloud Run. You'll need <span class="mono text-sm text-n-text">gcloud</span> CLI and a GCP project.</p>
+
+        <p class="text-sm text-n-muted mb-2">1. Clone the repo:</p>
+        <div class="code-block mb-4">
+            <span class="cmd">git</span> clone https://github.com/DeepBlueDynamics/nuts-tunnel.git<br>
+            <span class="cmd">cd</span> nuts-tunnel
+        </div>
+
+        <p class="text-sm text-n-muted mb-2">2. Generate a shared secret:</p>
+        <div class="code-block mb-4">
+            <span class="cmd">openssl</span> rand <span class="flag">-hex</span> 32
+        </div>
+
+        <p class="text-sm text-n-muted mb-2">3. Build and deploy to Cloud Run:</p>
+        <div class="code-block mb-4">
+            <span class="comment"># copy the Dockerfile to root (Cloud Build needs it there)</span><br>
+            <span class="cmd">cp</span> proxy/Dockerfile .<br><br>
+            <span class="comment"># build the container image</span><br>
+            <span class="cmd">gcloud</span> builds submit \<br>
+            &nbsp;&nbsp;<span class="flag">--tag</span> gcr.io/<span class="string">YOUR_PROJECT_ID</span>/nuts-proxy .<br><br>
+            <span class="comment"># deploy to Cloud Run</span><br>
+            <span class="cmd">gcloud</span> run deploy nuts-proxy \<br>
+            &nbsp;&nbsp;<span class="flag">--image</span> gcr.io/<span class="string">YOUR_PROJECT_ID</span>/nuts-proxy \<br>
+            &nbsp;&nbsp;<span class="flag">--region</span> us-central1 \<br>
+            &nbsp;&nbsp;<span class="flag">--platform</span> managed \<br>
+            &nbsp;&nbsp;<span class="flag">--allow-unauthenticated</span> \<br>
+            &nbsp;&nbsp;<span class="flag">--port</span> 8080 \<br>
+            &nbsp;&nbsp;<span class="flag">--memory</span> 256Mi \<br>
+            &nbsp;&nbsp;<span class="flag">--min-instances</span> 1 \<br>
+            &nbsp;&nbsp;<span class="flag">--max-instances</span> 3 \<br>
+            &nbsp;&nbsp;<span class="flag">--timeout</span> 3600 \<br>
+            &nbsp;&nbsp;<span class="flag">--set-env-vars</span> <span class="string">"NUTS_TOKEN=YOUR_SECRET_HERE"</span>
+        </div>
+
+        <p class="text-sm text-n-muted mb-2">4. Map a custom domain (optional):</p>
+        <div class="code-block mb-4">
+            <span class="cmd">gcloud</span> run domain-mappings create \<br>
+            &nbsp;&nbsp;<span class="flag">--service</span> nuts-proxy \<br>
+            &nbsp;&nbsp;<span class="flag">--domain</span> <span class="string">tunnel.yourdomain.com</span> \<br>
+            &nbsp;&nbsp;<span class="flag">--region</span> us-central1
+        </div>
+        <p class="text-n-muted mb-12 text-sm">Then add the CNAME record shown in the output to your DNS.</p>
+
+        <!-- Client -->
+        <h2 id="client" class="text-2xl font-bold mb-4">client reference</h2>
+        <p class="text-n-muted mb-4 leading-relaxed">The client is a single static binary. It connects to the proxy over WebSocket and tunnels HTTP requests to your local services.</p>
+
+        <div class="code-block mb-4">
+            <span class="cmd">nuts-client</span> \<br>
+            &nbsp;&nbsp;<span class="flag">--proxy</span> wss://tunnel.yourdomain.com/nuts/ws \<br>
+            &nbsp;&nbsp;<span class="flag">--token</span> <span class="string">YOUR_SECRET</span> \<br>
+            &nbsp;&nbsp;<span class="flag">--service</span> api=8080 \<br>
+            &nbsp;&nbsp;<span class="flag">--service</span> web=3000 \<br>
+            &nbsp;&nbsp;<span class="flag">--service</span> docs=4000
+        </div>
+
+        <div class="bg-n-surface border border-n-border rounded-xl p-5 mb-12">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-n-muted text-left border-b border-n-border">
+                        <th class="pb-2 mono">flag</th>
+                        <th class="pb-2">description</th>
+                        <th class="pb-2 mono">env var</th>
+                    </tr>
+                </thead>
+                <tbody class="mono">
+                    <tr class="border-b border-n-border/50">
+                        <td class="py-2 text-n-cyan">--proxy</td>
+                        <td class="py-2 font-sans text-n-muted">WebSocket URL of the proxy</td>
+                        <td class="py-2 text-n-purple">NUTS_PROXY_URL</td>
+                    </tr>
+                    <tr class="border-b border-n-border/50">
+                        <td class="py-2 text-n-cyan">--token</td>
+                        <td class="py-2 font-sans text-n-muted">Auth token (shared secret)</td>
+                        <td class="py-2 text-n-purple">NUTS_TOKEN</td>
+                    </tr>
+                    <tr class="border-b border-n-border/50">
+                        <td class="py-2 text-n-cyan">--service</td>
+                        <td class="py-2 font-sans text-n-muted">name=port mapping (repeatable)</td>
+                        <td class="py-2 text-n-muted">-</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 text-n-cyan">--config</td>
+                        <td class="py-2 font-sans text-n-muted">Path to TOML config file</td>
+                        <td class="py-2 text-n-muted">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Config -->
+        <h2 id="config" class="text-2xl font-bold mb-4">config file</h2>
+        <p class="text-n-muted mb-4 leading-relaxed">Instead of CLI flags, you can use a TOML config file:</p>
+
+        <div class="code-block mb-12">
+            <span class="comment"># nuts-tunnel.toml</span><br><br>
+            proxy_url = <span class="string">"wss://tunnel.yourdomain.com/nuts/ws"</span><br>
+            token = <span class="string">"your-secret-token"</span><br><br>
+            [[services]]<br>
+            subdomain = <span class="string">"api"</span><br>
+            port = <span class="string">8080</span><br><br>
+            [[services]]<br>
+            subdomain = <span class="string">"web"</span><br>
+            port = <span class="string">3000</span><br><br>
+            [[services]]<br>
+            subdomain = <span class="string">"docs"</span><br>
+            port = <span class="string">4000</span>
+        </div>
+
+        <!-- API -->
+        <h2 id="api" class="text-2xl font-bold mb-4">API endpoints</h2>
+
+        <div class="bg-n-surface border border-n-border rounded-xl p-5 mb-12">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-n-muted text-left border-b border-n-border">
+                        <th class="pb-2 mono">endpoint</th>
+                        <th class="pb-2">description</th>
+                    </tr>
+                </thead>
+                <tbody class="mono">
+                    <tr class="border-b border-n-border/50">
+                        <td class="py-2 text-n-cyan">GET /</td>
+                        <td class="py-2 font-sans text-n-muted">Landing page</td>
+                    </tr>
+                    <tr class="border-b border-n-border/50">
+                        <td class="py-2 text-n-cyan">GET /nuts/status</td>
+                        <td class="py-2 font-sans text-n-muted">JSON with active tunnel count and names</td>
+                    </tr>
+                    <tr class="border-b border-n-border/50">
+                        <td class="py-2 text-n-cyan">WS /nuts/ws</td>
+                        <td class="py-2 font-sans text-n-muted">WebSocket endpoint for tunnel clients</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 text-n-cyan">ANY /{service}/...</td>
+                        <td class="py-2 font-sans text-n-muted">Proxied to the tunnel client's local port</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <footer class="border-t border-n-border px-6 py-8 text-center">
+        <div class="text-n-muted text-xs">
+            <a href="https://github.com/DeepBlueDynamics/nuts-tunnel" class="hover:text-n-text transition">DeepBlueDynamics/nuts-tunnel</a>
+            &middot; open source under MIT &middot; built by <a href="https://nuts.services" class="hover:text-n-text transition">nuts.services</a>
+        </div>
+    </footer>
+
+</body>
+</html>

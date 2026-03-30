@@ -59,6 +59,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(landing_page))
+        .route("/docs", get(docs_page))
         .route("/nuts/ws", any(ws_handler))
         .route("/nuts/status", get(status_handler))
         .fallback(proxy_handler)
@@ -76,6 +77,10 @@ async fn main() {
 
 async fn landing_page() -> Html<&'static str> {
     Html(include_str!("../static/index.html"))
+}
+
+async fn docs_page() -> Html<&'static str> {
+    Html(include_str!("../static/docs.html"))
 }
 
 async fn status_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
