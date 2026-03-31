@@ -27,10 +27,15 @@ struct TunnelHandle {
     pending: Arc<PendingMap>,
 }
 
-/// Global state: subdomain → tunnel handle.
+/// Global state.
 struct AppState {
     tunnels: DashMap<String, Arc<TunnelHandle>>,
+    /// Legacy shared token (backward compat with NUTS_TOKEN env).
     token: String,
+    /// URL of the auth service (e.g. http://localhost:9000).
+    auth_url: String,
+    /// HTTP client for auth service calls.
+    http: reqwest::Client,
 }
 
 #[tokio::main]
@@ -48,20 +53,35 @@ async fn main() {
         .unwrap_or(8080);
 
     let token = std::env::var("NUTS_TOKEN").unwrap_or_else(|_| {
-        warn!("NUTS_TOKEN not set — any client can register tunnels");
+        warn!("NUTS_TOKEN not set — legacy token auth disabled");
+        String::new()
+    });
+
+    let auth_url = std::env::var("NUTS_AUTH_URL").unwrap_or_else(|_| {
+        warn!("NUTS_AUTH_URL not set — API token validation disabled");
         String::new()
     });
 
     let state = Arc::new(AppState {
         tunnels: DashMap::new(),
         token,
+        auth_url,
+        http: reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .expect("http client"),
     });
 
     let app = Router::new()
         .route("/", get(landing_page))
         .route("/docs", get(docs_page))
+        // Auth routes proxied to auth service
+        .route("/nuts/auth/{*rest}", any(auth_proxy_handler))
+        .route("/nuts/dashboard", any(auth_proxy_handler))
+        // WebSocket tunnel + status
         .route("/nuts/ws", any(ws_handler))
         .route("/nuts/status", get(status_handler))
+        // Proxy fallback
         .fallback(proxy_handler)
         .with_state(state);
 
@@ -92,6 +112,84 @@ async fn status_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse
     }))
 }
 
+// ── Auth proxy: forward /nuts/auth/* and /nuts/dashboard to auth service ──
+
+async fn auth_proxy_handler(
+    State(state): State<Arc<AppState>>,
+    req: axum::extract::Request,
+) -> Response {
+    if state.auth_url.is_empty() {
+        return (StatusCode::SERVICE_UNAVAILABLE, "auth service not configured").into_response();
+    }
+
+    let method: reqwest::Method = req.method().as_str().parse().unwrap_or(reqwest::Method::GET);
+    let path = req.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+    let url = format!("{}{}", state.auth_url, path);
+
+    let headers_map: Vec<(String, String)> = req
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+        .collect();
+
+    let body = match axum::body::to_bytes(req.into_body(), 1024 * 1024).await {
+        Ok(b) => b.to_vec(),
+        Err(_) => return (StatusCode::PAYLOAD_TOO_LARGE, "body too large").into_response(),
+    };
+
+    let mut fwd = state.http.request(method, &url).body(body);
+    for (k, v) in &headers_map {
+        let k_lower = k.to_lowercase();
+        if matches!(k_lower.as_str(), "host" | "connection" | "transfer-encoding") {
+            continue;
+        }
+        fwd = fwd.header(k.as_str(), v.as_str());
+    }
+
+    match fwd.send().await {
+        Ok(resp) => {
+            let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            let mut response_headers = HeaderMap::new();
+            for (k, v) in resp.headers() {
+                response_headers.insert(k.clone(), v.clone());
+            }
+            let body = resp.bytes().await.unwrap_or_default();
+            (status, response_headers, body).into_response()
+        }
+        Err(e) => {
+            warn!("auth proxy error: {e}");
+            (StatusCode::BAD_GATEWAY, format!("auth service error: {e}")).into_response()
+        }
+    }
+}
+
+// ── Token validation ──────────────────────────────────────────────────────
+
+async fn validate_token(state: &AppState, token: &str) -> bool {
+    // Legacy shared token
+    if !state.token.is_empty() && token == state.token {
+        return true;
+    }
+
+    // API token validation via auth service
+    if !state.auth_url.is_empty() && token.starts_with("ahp_") {
+        let url = format!("{}/api/validate", state.auth_url);
+        let resp = state.http
+            .post(&url)
+            .json(&serde_json::json!({"token": token}))
+            .send()
+            .await;
+        if let Ok(r) = resp {
+            if let Ok(body) = r.json::<serde_json::Value>().await {
+                return body.get("valid").and_then(|v| v.as_bool()).unwrap_or(false);
+            }
+        }
+        return false;
+    }
+
+    false
+}
+
 // ── WebSocket tunnel endpoint ──────────────────────────────────────────
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
@@ -105,10 +203,10 @@ async fn handle_tunnel(socket: WebSocket, state: Arc<AppState>) {
     let services: Vec<ServiceDef> = match ws_rx.next().await {
         Some(Ok(Message::Text(text))) => match serde_json::from_str::<ClientMsg>(&text) {
             Ok(ClientMsg::Register { token, services }) => {
-                if !state.token.is_empty() && token != state.token {
+                if !validate_token(&state, &token).await {
                     let msg = ProxyMsg::Registered {
                         ok: false,
-                        error: Some("bad token".into()),
+                        error: Some("invalid token".into()),
                     };
                     let _ = ws_tx
                         .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
@@ -160,7 +258,6 @@ async fn handle_tunnel(socket: WebSocket, state: Arc<AppState>) {
 
     // Writer task: forward ProxyMsg to WebSocket.
     let writer = tokio::spawn(async move {
-        // Send pings on a timer.
         let mut interval = tokio::time::interval(Duration::from_secs(30));
         loop {
             tokio::select! {
@@ -232,8 +329,6 @@ async fn proxy_handler(
     State(state): State<Arc<AppState>>,
     req: axum::extract::Request,
 ) -> Response {
-    // Path-based routing: /shivvr/health → service "shivvr", forwarded URI "/health"
-    // Extract first path segment as service name, strip it from the forwarded URI.
     let path = req.uri().path();
     let (service_name, remainder) = match path.strip_prefix('/') {
         Some(rest) => match rest.split_once('/') {
