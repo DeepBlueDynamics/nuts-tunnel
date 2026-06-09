@@ -1,0 +1,26 @@
+# nuts-client example config
+#
+# Run:
+#   nuts-client --config "%APPDATA%\nuts-tunnel\config.toml"
+#
+# Or set NUTS_PROXY_URL / NUTS_TOKEN as environment variables and pass
+# --service flags on the command line instead.
+
+proxy_url = "wss://your-proxy.example.com/nuts/ws"
+token     = "your-secret-token"
+
+# Each service exposes one local TCP port at <subdomain>.<your-domain>.
+# Examples:
+
+[[services]]
+subdomain = "app"
+port      = 8080
+
+[[services]]
+subdomain = "api"
+port      = 3000
+
+# [[services]]
+# subdomain   = "grafana"
+# port        = 3001
+# description = "monitoring dashboard"

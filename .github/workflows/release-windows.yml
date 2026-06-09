@@ -1,0 +1,95 @@
+name: Release · Windows installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version string for the installer (without leading v)'
+        required: true
+        default: '0.1.0'
+
+permissions:
+  contents: write   # needed for softprops/action-gh-release
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute version
+        id: ver
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $v = $env:GITHUB_REF.Substring('refs/tags/v'.Length)
+          } elseif ('${{ github.event.inputs.version }}' -ne '') {
+            $v = '${{ github.event.inputs.version }}'
+          } else {
+            $v = '0.0.0-dev'
+          }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Building version: $v"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Build release binary
+        run: cargo build --release --target x86_64-pc-windows-msvc -p nuts-client
+
+      - name: Verify binary
+        shell: pwsh
+        run: |
+          $exe = "target/x86_64-pc-windows-msvc/release/nuts-client.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "binary missing: $exe"
+            exit 1
+          }
+          Get-Item $exe | Select-Object Name, Length, LastWriteTime
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Compile installer
+        shell: pwsh
+        working-directory: installer/windows
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
+          if (-not (Test-Path $iscc)) {
+            $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+          }
+          if (-not $iscc) { Write-Error "iscc.exe not found"; exit 1 }
+          Write-Host "Using ISCC: $iscc"
+          & $iscc /DMyAppVersion=${{ steps.ver.outputs.version }} installer.iss
+
+      - name: List output
+        shell: pwsh
+        working-directory: installer/windows
+        run: Get-ChildItem Output
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuts-client-setup-${{ steps.ver.outputs.version }}
+          path: installer/windows/Output/*.exe
+          retention-days: 30
+
+      - name: Create / update GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/windows/Output/*.exe
+          fail_on_unmatched_files: true
+          generate_release_notes: true

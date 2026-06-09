@@ -1,0 +1,26 @@
+Nuts Tunnel installed.
+
+The nuts-client binary is now on your system PATH (assuming you left the
+"Add to PATH" task checked). Open a NEW terminal — not an existing one — and
+run:
+
+    nuts-client --help
+
+A sample config file is at:
+
+    %APPDATA%\nuts-tunnel\config.example.toml
+
+Copy it to config.toml in the same directory, fill in your proxy URL + token,
+then start tunneling:
+
+    nuts-client --config "%APPDATA%\nuts-tunnel\config.toml"
+
+Or use environment variables + CLI flags:
+
+    set NUTS_PROXY_URL=wss://your-proxy.example.com/nuts/ws
+    set NUTS_TOKEN=your-secret-token
+    nuts-client --service app=8080 --service api=3000
+
+Service ↔ subdomain map: <subdomain>.<your-tunnel-domain> → localhost:<port>
+
+More: https://tunnel.nuts.services
