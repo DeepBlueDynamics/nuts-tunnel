@@ -1,295 +1,349 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>nuts tunnel | Expose Localhost to the Internet</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tunnel — reverse tunnels through Cloud Run</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23080808'/%3E%3Ctext x='50%25' y='62%25' font-size='22' text-anchor='middle' fill='%2322d3ee'%3E🚇%3C/text%3E%3C/svg%3E">
+<meta name="description" content="Secure reverse tunnels through Google Cloud Run. Path-based routing, WebSocket transport, MIT-licensed, written in Rust. Expose any localhost port at https://tunnel.nuts.services/yourname/.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tunnel.nuts.services">
+<meta property="og:title" content="tunnel — reverse tunnels through Cloud Run">
+<meta property="og:description" content="Expose localhost at https://tunnel.nuts.services/yourname/. Three lines. No DNS, no nginx, no port forwarding.">
+<style>
+  :root {
+    --bg: #080808; --fg: #c8c8d0; --accent: #22d3ee; --accent2: #67e8f9;
+    --dim: #555568; --card: #0f0f14; --border: #1a1a22; --green: #22d3ee;
+    --red: #ff5555; --yellow: #fbbf24;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+    font-size: 14px; line-height: 1.75;
+    padding: 2.5rem 2rem; max-width: 900px; margin: 0 auto;
+    overflow-wrap: break-word;
+  }
 
-    <!-- OpenGraph -->
-    <meta property="og:title" content="nuts tunnel | Expose Localhost to the Internet">
-    <meta property="og:description" content="Secure tunnels through Google Cloud Run. Open source, self-hostable, path-based routing.">
-    <meta property="og:image" content="https://tunnel.nuts.services/og-image.png">
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://tunnel.nuts.services">
+  /* Topbar (auth state) */
+  .topbar {
+    display: flex; justify-content: flex-end; align-items: center;
+    gap: 0.75rem; margin-bottom: 1.5rem; font-size: 0.78rem;
+  }
+  .topbar .user { color: var(--dim); }
+  .topbar .user b { color: var(--accent2); font-weight: 600; }
+  .topbar a, .topbar button {
+    background: none; border: 1px solid var(--border);
+    color: var(--fg); padding: 0.35rem 0.85rem; border-radius: 5px;
+    font-family: inherit; font-size: 0.78rem; cursor: pointer;
+    text-decoration: none; transition: all 0.15s;
+  }
+  .topbar a:hover, .topbar button:hover { border-color: var(--accent); color: var(--accent); }
+  .topbar .primary { border-color: var(--accent); color: var(--accent); }
+  .topbar .primary:hover { background: var(--accent); color: #000; }
 
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="nuts tunnel | Expose Localhost to the Internet">
-    <meta name="twitter:description" content="Secure tunnels through Google Cloud Run. Open source, self-hostable, path-based routing.">
-    <meta name="twitter:image" content="https://tunnel.nuts.services/og-image.png">
+  /* Hero */
+  .hero { margin-bottom: 3rem; }
+  .hero h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    color: var(--accent); letter-spacing: -0.03em;
+    line-height: 1.1; margin-bottom: 0.4rem;
+  }
+  .hero h1 .ver { color: var(--dim); font-weight: 300; font-size: 0.42em; vertical-align: middle; margin-left: 0.4em; }
+  .hero .sub { color: var(--fg); font-size: 1.05rem; margin-bottom: 0.5rem; }
+  .hero .desc { color: var(--dim); font-size: 0.85rem; margin-bottom: 1.75rem; max-width: 600px; }
+  .ctas { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .cta {
+    display: inline-block;
+    padding: 0.55rem 1.25rem; border-radius: 6px; font-size: 0.82rem;
+    text-decoration: none; transition: all 0.15s;
+    border: 1px solid var(--accent); color: var(--accent);
+    background: none; font-family: inherit; cursor: pointer;
+  }
+  .cta:hover { background: var(--accent); color: #000; text-decoration: none; }
+  .cta.dim { border-color: var(--border); color: var(--dim); }
+  .cta.dim:hover { border-color: var(--dim); background: transparent; color: var(--fg); }
 
-    <!-- General -->
-    <meta name="description" content="Secure tunnels through Google Cloud Run. Open source, self-hostable, path-based routing.">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥜</text></svg>">
+  /* Stats */
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 1rem; margin-bottom: 3rem;
+  }
+  .stat {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem 1.2rem;
+  }
+  .stat .val { font-size: 1.6rem; color: var(--green); font-weight: 700; line-height: 1.2; }
+  .stat .lbl { font-size: 0.7rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.15rem; }
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  /* Section headings */
+  h2 {
+    color: var(--accent); font-size: 0.72rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    margin: 2.5rem 0 0.9rem; padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-    tailwind.config = {
-        darkMode: 'class',
-        theme: {
-            extend: {
-                colors: {
-                    'n-bg': '#08090d',
-                    'n-surface': '#0f1117',
-                    'n-surface2': '#161822',
-                    'n-border': '#1e2030',
-                    'n-cyan': '#00d4aa',
-                    'n-blue': '#0099ff',
-                    'n-purple': '#b388ff',
-                    'n-red': '#ff2244',
-                    'n-text': '#e0e4ef',
-                    'n-muted': '#6b7394',
-                }
-            }
-        }
-    }
-    </script>
-    <style>
-        body { font-family: 'Inter', -apple-system, sans-serif; }
-        .mono { font-family: 'JetBrains Mono', monospace; }
-        .glow { text-shadow: 0 0 30px rgba(0, 212, 170, 0.4); }
-        .glow-box { box-shadow: 0 0 40px rgba(0, 212, 170, 0.08), inset 0 1px 0 rgba(255,255,255,0.03); }
-        .grid-bg {
-            background-image:
-                linear-gradient(rgba(30, 32, 48, 0.3) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(30, 32, 48, 0.3) 1px, transparent 1px);
-            background-size: 60px 60px;
-        }
-        .code-block {
-            background: #0a0b10;
-            border: 1px solid #1e2030;
-            border-radius: 12px;
-            padding: 20px 24px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
-            line-height: 1.7;
-            overflow-x: auto;
-        }
-        .code-block .comment { color: #6b7394; }
-        .code-block .cmd { color: #00d4aa; }
-        .code-block .flag { color: #b388ff; }
-        .code-block .arg { color: #e0e4ef; }
-        .code-block .string { color: #0099ff; }
-        .pulse-dot { animation: pulse 2s ease-in-out infinite; }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.4); }
-            50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
-        }
-        .nav-blur { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-        .video-container {
-            border: 1px solid #1e2030;
-            border-radius: 12px;
-            overflow: hidden;
-            background: #0a0b10;
-        }
-        .feature-icon {
-            width: 40px; height: 40px;
-            border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 18px;
-        }
-    </style>
+  /* Capability cards */
+  .features {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.9rem; margin-bottom: 0.5rem;
+  }
+  .feature {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem 1.2rem;
+    transition: border-color 0.15s;
+  }
+  .feature:hover { border-color: var(--accent); }
+  .feature .name { color: var(--accent2); font-weight: 600; margin-bottom: 0.3rem; }
+  .feature p { color: var(--dim); font-size: 0.82rem; line-height: 1.6; }
+
+  /* Endpoint table */
+  .tbl-wrap { overflow-x: auto; margin: 0.25rem 0 0.5rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th, td { text-align: left; padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--dim); font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; }
+  td:first-child { color: var(--dim); white-space: nowrap; }
+  td code { color: var(--accent2); }
+  .method { color: var(--accent2); font-size: 0.75rem; }
+  tr:last-child td { border-bottom: none; }
+
+  /* Code */
+  pre {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.1rem 1.25rem;
+    overflow-x: auto; font-size: 0.8rem; line-height: 1.7;
+    margin: 0.25rem 0;
+  }
+  .cm { color: var(--dim); }
+  .kw { color: var(--accent2); }
+
+  /* Inline */
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { color: var(--accent2); font-size: 0.82rem; }
+
+  /* Footer links row */
+  .links { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 3rem; }
+  .links a {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.5rem 1.1rem; font-size: 0.8rem;
+    transition: border-color 0.15s;
+  }
+  .links a:hover { border-color: var(--accent); text-decoration: none; }
+</style>
 </head>
-<body class="bg-n-bg text-n-text min-h-screen grid-bg">
+<body>
 
-    <!-- Nav -->
-    <nav class="sticky top-0 z-50 border-b border-n-border bg-n-bg/80 nav-blur px-6 py-3">
-        <div class="max-w-5xl mx-auto flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <span class="text-n-cyan font-bold text-lg glow mono">nuts tunnel</span>
-                <span class="text-n-muted text-xs mono">v0.1.0</span>
-            </div>
-            <div class="flex items-center gap-5">
-                <a href="#how-it-works" class="text-n-muted hover:text-n-text text-sm transition">how it works</a>
-                <a href="/docs" class="text-n-muted hover:text-n-text text-sm transition">docs</a>
-                <a href="https://github.com/DeepBlueDynamics/nuts-tunnel" class="text-n-muted hover:text-n-text text-sm transition">github</a>
-                <button onclick="showLogin()" class="px-4 py-1.5 bg-n-cyan/10 border border-n-cyan/30 text-n-cyan text-sm rounded-lg hover:bg-n-cyan/20 transition font-medium">log in</button>
-            </div>
-        </div>
-    </nav>
+<!-- Topbar (auth state) -->
+<div class="topbar" id="topbar">
+  <span class="user" id="topbar-user" style="display:none">Logged in as <b id="topbar-email">…</b></span>
+  <a id="topbar-dashboard" href="https://auth.nuts.services/dashboard" style="display:none">Dashboard</a>
+  <button id="topbar-logout" onclick="logout()" style="display:none">Logout</button>
+  <a id="topbar-login" class="primary" href="#" onclick="login(); return false;">Login</a>
+</div>
 
-    <!-- Hero -->
-    <section class="max-w-5xl mx-auto px-6 pt-20 pb-12 text-center">
-        <div class="inline-flex items-center gap-2 px-3 py-1 bg-n-surface border border-n-border rounded-full text-xs text-n-muted mb-8">
-            <div class="w-1.5 h-1.5 rounded-full bg-green-400 pulse-dot"></div>
-            proxy online &middot; us-central1
-        </div>
-        <h1 class="text-5xl font-black mb-5 leading-tight">
-            <span class="text-n-cyan glow">expose localhost</span><br>
-            to the internet
-        </h1>
-        <p class="text-n-muted text-lg mb-3 max-w-xl mx-auto">secure reverse tunnels through Google Cloud Run. zero config DNS, path-based routing, open source.</p>
-        <p class="text-n-muted text-sm mb-10">self-hostable &middot; MIT licensed &middot; built in Rust</p>
+<!-- Hero -->
+<div class="hero">
+  <h1>tunnel 🚇 <span class="ver" id="hero-ver">v0.1.0</span></h1>
+  <p class="sub">Reverse tunnels through Cloud Run.</p>
+  <p class="desc">
+    Expose any <code>localhost</code> port at <code>https://tunnel.nuts.services/&lt;yourname&gt;/</code>.<br>
+    Path-based routing &middot; WebSocket transport &middot; auto-reconnect &middot; multi-service.<br>
+    Open source, MIT-licensed, self-hostable to any Cloud Run project. Written in Rust.
+  </p>
+  <div class="ctas">
+    <a class="cta" href="#quickstart">Quick Start</a>
+    <a class="cta" href="#endpoints">Endpoints</a>
+    <a class="cta dim" href="/nuts/status">Health</a>
+    <a class="cta dim" href="https://github.com/DeepBlueDynamics/nuts-tunnel">GitHub</a>
+  </div>
+</div>
 
-        <div class="code-block text-left max-w-2xl mx-auto mb-6">
-            <span class="comment"># install the client</span><br>
-            <span class="cmd">curl</span> <span class="flag">-fsSL</span> <span class="arg">https://tunnel.nuts.services/install.sh</span> | <span class="cmd">sh</span><br><br>
-            <span class="comment"># expose port 3000 as "myapp"</span><br>
-            <span class="cmd">nuts-client</span> <span class="flag">--token</span> <span class="string">YOUR_TOKEN</span> <span class="flag">--service</span> <span class="arg">myapp=3000</span><br><br>
-            <span class="comment"># live at:</span><br>
-            <span class="arg">https://tunnel.nuts.services/myapp/</span>
-        </div>
-        <p class="text-n-muted text-xs">3 lines. no DNS. no nginx. no port forwarding.</p>
-    </section>
+<!-- Stats -->
+<div class="stats">
+  <div class="stat"><div class="val" id="s-status">—</div><div class="lbl">Status</div></div>
+  <div class="stat"><div class="val" id="s-tunnels">—</div><div class="lbl">Active tunnels</div></div>
+  <div class="stat"><div class="val">us-central1</div><div class="lbl">Region</div></div>
+  <div class="stat"><div class="val">Rust / Axum</div><div class="lbl">Runtime</div></div>
+</div>
 
-    <!-- Video Demo (uncomment when ready)
-    <section id="demo" class="max-w-4xl mx-auto px-6 pb-16">
-        <div class="video-container glow-box">
-            <video id="demo-video" class="w-full" autoplay muted loop playsinline>
-                <source src="/demo.mp4" type="video/mp4">
-            </video>
-        </div>
-    </section>
-    -->
+<!-- Capabilities -->
+<h2>Capabilities</h2>
+<div class="features">
+  <div class="feature">
+    <div class="name">Path-based routing</div>
+    <p>No wildcard DNS or custom domains. Every tunnel is reachable under one domain at <code>/&lt;name&gt;/</code>.</p>
+  </div>
+  <div class="feature">
+    <div class="name">WebSocket transport</div>
+    <p>Client holds a persistent WebSocket out. No open ports on your machine, no inbound firewall rules.</p>
+  </div>
+  <div class="feature">
+    <div class="name">Auto-reconnect</div>
+    <p>Exponential backoff on disconnect. Tunnels survive network blips, laptop sleep, and Cloud Run cold starts.</p>
+  </div>
+  <div class="feature">
+    <div class="name">Multi-service</div>
+    <p>One client process exposes many local ports. Run your whole dev stack through a single connection.</p>
+  </div>
+  <div class="feature">
+    <div class="name">Self-hostable</div>
+    <p>One Dockerfile, one env var. Deploy your own proxy to any Cloud Run project and point clients at it.</p>
+  </div>
+  <div class="feature">
+    <div class="name">NUTS auth</div>
+    <p>Clients authenticate with an <code>ahp_</code> token from <a href="https://auth.nuts.services">auth.nuts.services</a>. Token gates which tunnel names the client can claim.</p>
+  </div>
+</div>
 
-    <!-- How it works -->
-    <section id="how-it-works" class="max-w-5xl mx-auto px-6 pb-20">
-        <h2 class="text-2xl font-bold text-center mb-12">how it works</h2>
-        <div class="grid md:grid-cols-3 gap-6">
-            <div class="bg-n-surface border border-n-border rounded-xl p-6 glow-box">
-                <div class="feature-icon bg-n-cyan/10 text-n-cyan mb-4">1</div>
-                <h3 class="font-bold mb-2">sign up</h3>
-                <p class="text-n-muted text-sm leading-relaxed">enter your email. we send a magic link. no passwords, no OAuth, no friction.</p>
-            </div>
-            <div class="bg-n-surface border border-n-border rounded-xl p-6 glow-box">
-                <div class="feature-icon bg-n-blue/10 text-n-blue mb-4">2</div>
-                <h3 class="font-bold mb-2">create a token</h3>
-                <p class="text-n-muted text-sm leading-relaxed">generate an API token in your dashboard. claim a unique tunnel name. done.</p>
-            </div>
-            <div class="bg-n-surface border border-n-border rounded-xl p-6 glow-box">
-                <div class="feature-icon bg-n-purple/10 text-n-purple mb-4">3</div>
-                <h3 class="font-bold mb-2">connect</h3>
-                <p class="text-n-muted text-sm leading-relaxed">run the client. your local service is instantly live at <span class="mono text-xs">tunnel.nuts.services/yourname/</span></p>
-            </div>
-        </div>
-    </section>
+<!-- Endpoints -->
+<h2 id="endpoints">Endpoints</h2>
+<div class="tbl-wrap">
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+  <tr><td class="method">ANY</td><td><code>/&lt;tunnel&gt;/*</code></td><td>Forwarded to the client registered under <code>&lt;tunnel&gt;</code>.</td></tr>
+  <tr><td class="method">WS</td><td><code>/_tunnel/connect</code></td><td>Client → proxy persistent connection. Auth: <code>ahp_</code> token.</td></tr>
+  <tr><td class="method">GET</td><td><code>/nuts/status</code></td><td>Liveness. Returns <code>ok</code>.</td></tr>
+  <tr><td class="method">GET</td><td><code>/docs</code></td><td>Protocol &amp; client docs.</td></tr>
+</table>
+</div>
+<p style="color:var(--dim);font-size:0.78rem;margin-top:0.5rem">
+  Get an <code>ahp_</code> token at the <a href="https://auth.nuts.services/dashboard">auth dashboard</a> and pass it as <code>--token</code> to <code>nuts-client</code>.
+</p>
 
-    <!-- Features -->
-    <section class="max-w-5xl mx-auto px-6 pb-20">
-        <div class="grid md:grid-cols-2 gap-6">
-            <div class="bg-n-surface border border-n-border rounded-xl p-6">
-                <h3 class="font-bold mb-2 text-n-cyan">path-based routing</h3>
-                <p class="text-n-muted text-sm leading-relaxed">no wildcard DNS or custom domains needed. every tunnel gets a clean path under one domain.</p>
-            </div>
-            <div class="bg-n-surface border border-n-border rounded-xl p-6">
-                <h3 class="font-bold mb-2 text-n-blue">auto-reconnect</h3>
-                <p class="text-n-muted text-sm leading-relaxed">client reconnects with exponential backoff. tunnels survive network blips and laptop sleeps.</p>
-            </div>
-            <div class="bg-n-surface border border-n-border rounded-xl p-6">
-                <h3 class="font-bold mb-2 text-n-purple">self-hostable</h3>
-                <p class="text-n-muted text-sm leading-relaxed">deploy your own proxy to any Cloud Run project. one Dockerfile, one env var, done.</p>
-            </div>
-            <div class="bg-n-surface border border-n-border rounded-xl p-6">
-                <h3 class="font-bold mb-2 text-n-text">multi-service</h3>
-                <p class="text-n-muted text-sm leading-relaxed">one client, many services. expose your entire dev stack through a single tunnel connection.</p>
-            </div>
-        </div>
-    </section>
+<!-- Quick start -->
+<h2 id="quickstart">Quick start</h2>
+<pre><code><span class="cm"># 1. Install the client</span>
+curl -fsSL https://tunnel.nuts.services/install.sh | sh
 
-    <!-- Live Status -->
-    <section class="max-w-5xl mx-auto px-6 pb-20">
-        <div class="bg-n-surface border border-n-border rounded-xl p-6 glow-box">
-            <div class="flex items-center gap-3 mb-5">
-                <div class="w-2 h-2 rounded-full bg-green-400 pulse-dot"></div>
-                <span class="text-sm font-bold">live status</span>
-                <span class="text-n-muted text-xs mono ml-auto">tunnel.nuts.services</span>
-            </div>
-            <div class="grid md:grid-cols-4 gap-4 text-sm">
-                <div>
-                    <span class="text-n-muted text-xs">region</span><br>
-                    <span class="mono">us-central1</span>
-                </div>
-                <div>
-                    <span class="text-n-muted text-xs">active tunnels</span><br>
-                    <span class="mono" id="tunnel-count">--</span>
-                </div>
-                <div>
-                    <span class="text-n-muted text-xs">protocol</span><br>
-                    <span class="mono">WebSocket</span>
-                </div>
-                <div>
-                    <span class="text-n-muted text-xs">proxy</span><br>
-                    <span class="mono">Rust / Axum</span>
-                </div>
-            </div>
-        </div>
-    </section>
+<span class="cm"># 2. Get an ahp_ token from your dashboard</span>
+<span class="cm">#    https://auth.nuts.services/dashboard</span>
 
-    <!-- Login Modal -->
-    <div id="login-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden items-center justify-center z-50" onclick="if(event.target===this)hideLogin()">
-        <div class="bg-n-surface border border-n-border rounded-xl p-8 w-full max-w-md glow-box">
-            <h2 class="text-xl font-bold mb-2">log in</h2>
-            <p class="text-n-muted text-sm mb-6">enter your email and we'll send you a magic link</p>
-            <form id="login-form" onsubmit="handleLogin(event)">
-                <input type="email" id="email-input" placeholder="you@example.com"
-                    class="w-full bg-n-bg border border-n-border rounded-lg px-4 py-3 text-sm mb-4 focus:border-n-cyan focus:outline-none transition"
-                    required>
-                <button type="submit" id="login-btn"
-                    class="w-full bg-n-cyan/10 border border-n-cyan/30 text-n-cyan py-3 rounded-lg font-bold text-sm hover:bg-n-cyan/20 transition">
-                    send magic link
-                </button>
-            </form>
-            <div id="login-success" class="hidden text-center py-6">
-                <div class="text-n-cyan text-2xl font-bold mb-3">check your email</div>
-                <p class="text-n-muted text-sm">we sent a login link. click it to continue.</p>
-            </div>
-        </div>
+<span class="cm"># 3. Expose localhost:3000 as "myapp"</span>
+nuts-client --token ahp_yourtoken --service myapp=3000
+
+<span class="cm"># Now reachable at:</span>
+<span class="kw">https://tunnel.nuts.services/myapp/</span>
+
+<span class="cm"># Expose multiple ports in one connection</span>
+nuts-client --token ahp_yourtoken \
+  --service api=8000 \
+  --service web=3000 \
+  --service db-admin=5050</code></pre>
+
+<!-- Footer links -->
+<div class="links">
+  <a href="https://auth.nuts.services/dashboard">Dashboard</a>
+  <a href="/nuts/status">Health</a>
+  <a href="/docs">Docs</a>
+  <a href="https://github.com/DeepBlueDynamics/nuts-tunnel">GitHub</a>
+</div>
+
+<footer class="nuts-footer">
+  <div class="nuts-footer-inner">
+    <div class="nuts-footer-left">
+      <svg class="nuts-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <polygon points="16,2.5 27.5,9 27.5,23 16,29.5 4.5,23 4.5,9" fill="#e8a020"/>
+        <circle cx="16" cy="16" r="5.5" fill="#0a0a10"/>
+      </svg>
+      <span class="nuts-wordmark">NUTS SERVICES</span>
+      <span class="nuts-sep">&middot;</span>
+      <a class="nuts-dbd" href="https://deepbluedynamics.com">DeepBlue Dynamics, LLC</a>
     </div>
-
-    <!-- Dashboard (hidden, shown after auth) -->
-    <div id="dashboard" class="hidden max-w-4xl mx-auto px-6 pb-16">
-        <div class="bg-n-surface border border-n-border rounded-xl p-6 mb-6 glow-box">
-            <h2 class="font-bold mb-4">your tunnels</h2>
-            <div class="text-n-muted text-sm mb-4">no tunnels registered yet</div>
-            <div class="flex gap-3">
-                <input type="text" placeholder="tunnel name (e.g. myapp)"
-                    class="flex-1 bg-n-bg border border-n-border rounded-lg px-4 py-2 text-sm focus:border-n-cyan focus:outline-none">
-                <input type="number" placeholder="port" value="3000"
-                    class="w-24 bg-n-bg border border-n-border rounded-lg px-4 py-2 text-sm focus:border-n-cyan focus:outline-none">
-                <button class="px-4 py-2 bg-n-cyan/10 border border-n-cyan/30 text-n-cyan text-sm rounded-lg hover:bg-n-cyan/20 transition font-medium">register</button>
-            </div>
-        </div>
-        <div class="bg-n-surface border border-n-border rounded-xl p-6 glow-box">
-            <h2 class="font-bold mb-4">API tokens</h2>
-            <div class="text-n-muted text-sm mb-4">create a token to authenticate the nuts-client</div>
-            <div class="flex gap-3">
-                <input type="text" placeholder="token name (e.g. laptop)"
-                    class="flex-1 bg-n-bg border border-n-border rounded-lg px-4 py-2 text-sm focus:border-n-cyan focus:outline-none">
-                <button class="px-4 py-2 bg-n-cyan/10 border border-n-cyan/30 text-n-cyan text-sm rounded-lg hover:bg-n-cyan/20 transition font-medium">create token</button>
-            </div>
-        </div>
+    <div class="nuts-footer-right">
+      <a href="https://auth.nuts.services/dashboard">Auth Dashboard</a>
+      <a href="https://auth.nuts.services">Auth</a>
+      <a href="https://github.com/DeepBlueDynamics/nuts-tunnel" target="_blank" rel="noopener">GitHub</a>
     </div>
+  </div>
+</footer>
+<style>
+.nuts-footer{border-top:1px solid rgba(232,160,32,.18);padding:22px 28px;margin-top:3rem;
+  font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px;
+  color:rgba(255,255,255,.55);letter-spacing:.04em;background:transparent}
+.nuts-footer-inner{max-width:1140px;margin:0 auto;display:flex;align-items:center;
+  justify-content:space-between;gap:18px;flex-wrap:wrap}
+.nuts-footer-left{display:flex;align-items:center;gap:11px}
+.nuts-mark{width:18px;height:18px;flex:none}
+.nuts-wordmark{letter-spacing:.18em;font-weight:700;color:#e8a020;text-transform:uppercase}
+.nuts-sep{color:rgba(232,160,32,.45)}
+.nuts-dbd{color:inherit;text-decoration:none;border-bottom:1px solid transparent;transition:color .15s,border-color .15s}
+.nuts-dbd:hover{color:#e8a020;border-bottom-color:rgba(232,160,32,.55)}
+.nuts-footer-right{display:flex;align-items:center;gap:20px;text-transform:uppercase}
+.nuts-footer-right a{color:inherit;text-decoration:none;letter-spacing:.12em;
+  border-bottom:1px solid transparent;transition:color .15s,border-color .15s}
+.nuts-footer-right a:hover{color:#e8a020;border-bottom-color:rgba(232,160,32,.55)}
+@media(max-width:560px){.nuts-footer-inner{justify-content:center;text-align:center}}
+</style>
 
-    <footer class="border-t border-n-border px-6 py-8 text-center">
-        <div class="text-n-muted text-xs">
-            <a href="https://github.com/DeepBlueDynamics/nuts-tunnel" class="hover:text-n-text transition">DeepBlueDynamics/nuts-tunnel</a>
-            &middot; open source under MIT &middot; built by <a href="https://nuts.services" class="hover:text-n-text transition">nuts.services</a>
-        </div>
-    </footer>
+<script>
+const AUTH_BASE = 'https://auth.nuts.services';
+const SELF_BASE = location.origin;
 
-    <script>
-    function showLogin() {
-        document.getElementById('login-modal').classList.remove('hidden');
-        document.getElementById('login-modal').classList.add('flex');
-        document.getElementById('email-input').focus();
-    }
-    function hideLogin() {
-        document.getElementById('login-modal').classList.add('hidden');
-        document.getElementById('login-modal').classList.remove('flex');
-    }
-    function handleLogin(e) {
-        e.preventDefault();
-        document.getElementById('login-form').classList.add('hidden');
-        document.getElementById('login-success').classList.remove('hidden');
-    }
-    // Fetch live tunnel count
-    fetch('/nuts/status').then(r => r.json()).then(data => {
-        document.getElementById('tunnel-count').textContent = data.active_tunnels || '0';
-    }).catch(() => {});
-    </script>
+function getToken() { return localStorage.getItem('nuts_session_token') || ''; }
+
+function decodeJwtEmail(jwt) {
+  try {
+    const payload = JSON.parse(atob(jwt.split('.')[1]));
+    return payload.sub || payload.email || '';
+  } catch (e) { return ''; }
+}
+
+function applyAuthState() {
+  // Capture ?token= from URL (after auth redirect) into localStorage.
+  const params = new URLSearchParams(location.search);
+  const urlToken = params.get('token');
+  if (urlToken) {
+    localStorage.setItem('nuts_session_token', urlToken);
+    history.replaceState({}, '', location.pathname + location.hash);
+  }
+
+  let token = getToken();
+  // Expired JWT → wipe so topbar shows Login instead of stale identity.
+  if (token) {
+    try {
+      const p = JSON.parse(atob(token.split('.')[1]));
+      if (p.exp && p.exp * 1000 < Date.now()) {
+        localStorage.removeItem('nuts_session_token');
+        token = '';
+      }
+    } catch (e) { /* malformed; ignore */ }
+  }
+  const loggedIn = !!token;
+  const email = loggedIn ? decodeJwtEmail(token) : '';
+
+  document.getElementById('topbar-user').style.display      = loggedIn && email ? '' : 'none';
+  document.getElementById('topbar-dashboard').style.display = loggedIn ? '' : 'none';
+  document.getElementById('topbar-logout').style.display    = loggedIn ? '' : 'none';
+  document.getElementById('topbar-login').style.display     = loggedIn ? 'none' : '';
+  if (email) document.getElementById('topbar-email').textContent = email;
+}
+
+function login() {
+  const ret = encodeURIComponent(SELF_BASE);
+  location.href = AUTH_BASE + '/login?return_url=' + ret;
+}
+
+function logout() {
+  localStorage.removeItem('nuts_session_token');
+  applyAuthState();
+}
+
+async function loadHealth() {
+  try {
+    const res = await fetch('/nuts/status');
+    if (!res.ok) return;
+    document.getElementById('s-status').textContent = '✓';
+  } catch (e) {
+    document.getElementById('s-status').textContent = '✕';
+  }
+}
+
+applyAuthState();
+loadHealth();
+</script>
+
 </body>
 </html>
